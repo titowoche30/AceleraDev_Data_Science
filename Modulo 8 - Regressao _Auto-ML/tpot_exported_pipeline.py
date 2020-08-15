@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import ElasticNetCV
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline, make_union
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.tree import DecisionTreeRegressor
-from tpot.builtins import StackingEstimator
+from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
+from tpot.builtins import OneHotEncoder, StackingEstimator
 from tpot.export_utils import set_param_recursive
 
 # NOTE: Make sure that the outcome column is labeled 'target' in the data file
@@ -14,11 +14,18 @@ features = tpot_data.drop('target', axis=1)
 training_features, testing_features, training_target, testing_target = \
             train_test_split(features, tpot_data['target'], random_state=42)
 
-# Average CV score on the training set was: 0.9242357678262906
+# Average CV score on the training set was: 0.926344109278679
 exported_pipeline = make_pipeline(
-    StackingEstimator(estimator=DecisionTreeRegressor(max_depth=3, min_samples_leaf=7, min_samples_split=11)),
-    PolynomialFeatures(degree=2, include_bias=False, interaction_only=False),
-    RandomForestRegressor(bootstrap=True, max_features=0.4, min_samples_leaf=16, min_samples_split=17, n_estimators=100)
+    make_union(
+        StackingEstimator(estimator=GradientBoostingRegressor(alpha=0.9, learning_rate=0.01, loss="huber", max_depth=4, max_features=0.15000000000000002, min_samples_leaf=7, min_samples_split=13, n_estimators=100, subsample=0.25)),
+        make_pipeline(
+            StackingEstimator(estimator=ElasticNetCV(l1_ratio=0.75, tol=0.001)),
+            PolynomialFeatures(degree=2, include_bias=False, interaction_only=False),
+            MinMaxScaler()
+        )
+    ),
+    OneHotEncoder(minimum_fraction=0.2, sparse=False, threshold=10),
+    RandomForestRegressor(bootstrap=True, max_features=0.4, min_samples_leaf=16, min_samples_split=14, n_estimators=100)
 )
 # Fix random state for all the steps in exported pipeline
 set_param_recursive(exported_pipeline.steps, 'random_state', 42)
